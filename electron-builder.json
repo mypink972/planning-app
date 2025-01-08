@@ -1,0 +1,41 @@
+{
+  "appId": "com.mtz.planning",
+  "productName": "Planning MTZ",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*",
+    "server/**/*",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "node_modules",
+      "to": "node_modules",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
+      "from": "server",
+      "to": "server",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
+      "from": "build/icon.png",
+      "to": "icon.png"
+    }
+  ],
+  "mac": {
+    "category": "public.app-category.business",
+    "icon": "build/icon.icns",
+    "target": ["dmg"],
+    "hardenedRuntime": false,
+    "gatekeeperAssess": false,
+    "identity": null
+  }
+}
