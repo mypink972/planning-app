@@ -1,6 +1,7 @@
+import React from 'react';
 import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
-import { Copy, Trash2 } from 'lucide-react';
+import { Copy, Trash2, X } from 'lucide-react';
 import type { Employee, Schedule, TimeSlot, AbsenceType } from '../../types';
 import ScheduleModal from './ScheduleModal';
 import { calculateTotalHours, formatDateToFrench } from '../../utils/dates';
@@ -10,6 +11,7 @@ import { getTimeSlots } from '../../services/timeSlots';
 import { getAbsenceTypes } from '../../services/absenceTypes';
 import { getSchedules, upsertSchedule, copyWeekSchedules, deleteWeekSchedules } from '../../services/schedules';
 import { getDefaultStoreHours } from '../../utils/defaultStoreHours';
+import { upsertStoreHours } from '../../services/storeHoursService';
 
 interface WeeklyScheduleProps {
   weekDates: Date[];
@@ -27,35 +29,258 @@ export interface WeeklyScheduleHandle {
   handleDeleteWeek: () => void;
 }
 
+interface StoreHoursCellProps {
+  date: Date;
+  defaultHours: { start: string; end: string } | 'closed';
+  storeHours: {
+    date: string;
+    isClosed: boolean;
+    timeSlotId?: string;
+  }[];
+  onStoreHoursChange: (newStoreHours: {
+    date: string;
+    isClosed: boolean;
+    timeSlotId?: string;
+  }[]) => void;
+}
+
+const StoreHoursSettings = ({ date, value, onChange, onClose }: {
+  date: Date;
+  value: string;
+  onChange: (value: string) => void;
+  onClose: () => void;
+}) => {
+  const [isClosed, setIsClosed] = React.useState(value === 'closed');
+  const defaultTimeValues = {
+    startHour: '09',
+    startMinute: '00',
+    endHour: '20',
+    endMinute: '00'
+  };
+
+  const parseTimeValue = (val: string) => {
+    if (val === 'closed') return defaultTimeValues;
+    const [sh = defaultTimeValues.startHour, sm = defaultTimeValues.startMinute, 
+           eh = defaultTimeValues.endHour, em = defaultTimeValues.endMinute] = val?.split(':') || [];
+    return { startHour: sh, startMinute: sm, endHour: eh, endMinute: em };
+  };
+
+  const [timeValues, setTimeValues] = React.useState(() => {
+    const defaultValue = getDefaultStoreHours(date);
+    return parseTimeValue(typeof defaultValue === 'string' ? defaultValue : `${defaultValue.start.replace(':', ':')}:${defaultValue.end.replace(':', ':')}`);
+  });
+
+  const handleSave = () => {
+    if (isClosed) {
+      onChange('closed');
+    } else {
+      const { startHour, startMinute, endHour, endMinute } = timeValues;
+      onChange(`${startHour}:${startMinute}:${endHour}:${endMinute}`);
+    }
+    onClose();
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold">
+            Horaires du {formatDateToFrench(date, { weekday: 'long', day: 'numeric' })}
+          </h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={isClosed}
+              onChange={(e) => setIsClosed(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            <span>Fermé</span>
+          </label>
+
+          {!isClosed && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Heure d'ouverture</label>
+                <div className="mt-1 flex space-x-2">
+                  <select
+                    value={timeValues.startHour}
+                    onChange={(e) => setTimeValues(v => ({ ...v, startHour: e.target.value }))}
+                    className="block w-20 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  >
+                    {Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0')).map((hour) => (
+                      <option key={hour} value={hour}>{hour}</option>
+                    ))}
+                  </select>
+                  <span className="text-xl">:</span>
+                  <select
+                    value={timeValues.startMinute}
+                    onChange={(e) => setTimeValues(v => ({ ...v, startMinute: e.target.value }))}
+                    className="block w-20 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  >
+                    {['00', '15', '30', '45'].map((minute) => (
+                      <option key={minute} value={minute}>{minute}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Heure de fermeture</label>
+                <div className="mt-1 flex space-x-2">
+                  <select
+                    value={timeValues.endHour}
+                    onChange={(e) => setTimeValues(v => ({ ...v, endHour: e.target.value }))}
+                    className="block w-20 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  >
+                    {Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0')).map((hour) => (
+                      <option key={hour} value={hour}>{hour}</option>
+                    ))}
+                  </select>
+                  <span className="text-xl">:</span>
+                  <select
+                    value={timeValues.endMinute}
+                    onChange={(e) => setTimeValues(v => ({ ...v, endMinute: e.target.value }))}
+                    className="block w-20 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  >
+                    {['00', '15', '30', '45'].map((minute) => (
+                      <option key={minute} value={minute}>{minute}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end space-x-2 mt-6">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Enregistrer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+const StoreHoursCell = ({ date, defaultHours, storeHours, onStoreHoursChange }: StoreHoursCellProps) => {
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const dateStr = date.toISOString().split('T')[0];
+  const storeHour = storeHours.find(sh => sh.date === dateStr);
+  
+  const formatTime = (timeSlotId: string | undefined) => {
+    if (!timeSlotId) return null;
+    const [start, end] = timeSlotId.split('-');
+    return `${start} - ${end}`;
+  };
+
+  const displayHours = () => {
+    if (storeHour?.isClosed) {
+      return 'Fermé';
+    }
+    
+    if (storeHour?.timeSlotId) {
+      return formatTime(storeHour.timeSlotId);
+    }
+
+    if (defaultHours === 'closed') {
+      return 'Fermé';
+    }
+
+    return `${defaultHours.start} - ${defaultHours.end}`;
+  };
+
+  const handleChange = async (value: string) => {
+    const newStoreHours = [...storeHours];
+    const index = newStoreHours.findIndex(sh => sh.date === dateStr);
+    
+    let updatedStoreHour;
+    if (value === 'closed') {
+      updatedStoreHour = { 
+        date: dateStr, 
+        isClosed: true 
+      };
+    } else {
+      const [startHour, startMinute, endHour, endMinute] = value.split(':');
+      const timeSlotId = `${startHour}:${startMinute}-${endHour}:${endMinute}`;
+      updatedStoreHour = { 
+        date: dateStr, 
+        isClosed: false,
+        timeSlotId
+      };
+    }
+
+    // Mettre à jour la base de données
+    const result = await upsertStoreHours(updatedStoreHour);
+    if (result) {
+      // Mettre à jour l'état local
+      if (index !== -1) {
+        newStoreHours[index] = result;
+      } else {
+        newStoreHours.push(result);
+      }
+      onStoreHoursChange(newStoreHours);
+    }
+  };
+  
+  return (
+    <div className="text-sm text-gray-500">
+      <button 
+        onClick={() => setIsSettingsOpen(true)}
+        className="hover:text-blue-600 transition-colors cursor-pointer"
+      >
+        {displayHours()}
+      </button>
+
+      {isSettingsOpen && (
+        <StoreHoursSettings
+          date={date}
+          value={storeHour?.isClosed ? 'closed' : storeHour?.timeSlotId ? storeHour.timeSlotId.replace('-', ':') : defaultHours === 'closed' ? '09:00:20:00' : `${defaultHours.start.replace(':', ':')}:${defaultHours.end.replace(':', ':')}`}
+          onChange={handleChange}
+          onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
+    </div>
+  );
+};
+
 export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function WeeklySchedule({
   weekDates,
-  storeHours,
+  storeHours: initialStoreHours,
   onScheduleChange,
   tableRef
-}: WeeklyScheduleProps, ref) {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
-  const [absenceTypes, setAbsenceTypes] = useState<AbsenceType[]>([]);
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [selectedCell, setSelectedCell] = useState<{
+}, ref) {
+  const [employees, setEmployees] = React.useState<Employee[]>([]);
+  const [timeSlots, setTimeSlots] = React.useState<TimeSlot[]>([]);
+  const [absenceTypes, setAbsenceTypes] = React.useState<AbsenceType[]>([]);
+  const [schedules, setSchedules] = React.useState<Schedule[]>([]);
+  const [storeHours, setStoreHours] = React.useState(initialStoreHours);
+  const [selectedCell, setSelectedCell] = React.useState<{
     employeeId: string;
     date: Date;
   } | null>(null);
-  const [showCopyModal, setShowCopyModal] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [showCopyModal, setShowCopyModal] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [selectedSourceDate, setSelectedSourceDate] = React.useState<Date | null>(null);
 
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  useEffect(() => {
-    if (weekDates.length > 0) {
-      loadSchedules();
-    }
-  }, [weekDates, storeHours]);
-
-  async function loadInitialData() {
+  const loadInitialData = async () => {
     try {
+      setIsLoading(true);
       const [employeesData, timeSlotsData, absenceTypesData] = await Promise.all([
         getEmployees(),
         getTimeSlots(),
@@ -65,10 +290,27 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
       setEmployees(employeesData);
       setTimeSlots(timeSlotsData);
       setAbsenceTypes(absenceTypesData);
+      await loadSchedules();
     } catch (error) {
-      console.error('Erreur lors du chargement des données:', error);
+      console.error('Error loading initial data:', error);
+    } finally {
+      setIsLoading(false);
     }
-  }
+  };
+
+  React.useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  React.useEffect(() => {
+    setStoreHours(initialStoreHours);
+  }, [initialStoreHours]);
+
+  React.useEffect(() => {
+    if (weekDates.length > 0) {
+      loadSchedules();
+    }
+  }, [weekDates, storeHours]);
 
   async function loadSchedules() {
     try {
@@ -92,6 +334,8 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
   };
 
   const getScheduleForCell = (employeeId: string, date: Date) => {
+    if (!schedules) return { employeeId, date: date.toISOString().split('T')[0], isPresent: true };
+    
     const dateStr = date.toISOString().split('T')[0];
     return (
       schedules.find(
@@ -120,6 +364,8 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
   const handleScheduleChange = async (schedule: Schedule) => {
     try {
       await upsertSchedule(schedule);
+      
+      // Mettre à jour le state local immédiatement
       setSchedules(prevSchedules => {
         const newSchedules = prevSchedules.filter(s => 
           s.employeeId !== schedule.employeeId || 
@@ -127,6 +373,14 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
         );
         return [...newSchedules, schedule];
       });
+
+      // Recharger les données pour s'assurer de la synchronisation
+      await loadSchedules();
+      
+      // Fermer le modal
+      setSelectedCell(null);
+      
+      // Notifier le parent si nécessaire
       if (onScheduleChange) onScheduleChange();
     } catch (error) {
       console.error('Erreur lors de la mise à jour du planning:', error);
@@ -139,54 +393,139 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
     }
   };
 
-  const handleCopyWeek = async (sourceWeekNumber: number) => {
+  const getWeekNumber = (date: Date): number => {
+    // La semaine 1 commence le 30 décembre 2024
+    const startOfWeek1 = new Date(2024, 11, 30); // 30 décembre 2024
+    
+    const diff = date.getTime() - startOfWeek1.getTime();
+    const weekNumber = Math.floor(diff / (7 * 24 * 60 * 60 * 1000)) + 1;
+    return weekNumber > 0 ? weekNumber : 52 + weekNumber; // Pour les semaines avant le 30 décembre
+  };
+
+  const getAvailableWeeks = () => {
+    const weeks: { date: Date; weekNumber: number }[] = [];
+    
+    // Commencer au 30 décembre 2024 (début de la semaine 1)
+    const startDate = new Date(2024, 11, 30);
+    // Finir au 28 décembre 2025 (fin de la semaine 52)
+    const endDate = new Date(2025, 11, 28);
+
+    let currentWeek = new Date(startDate);
+    while (currentWeek <= endDate) {
+      weeks.push({
+        date: new Date(currentWeek),
+        weekNumber: getWeekNumber(currentWeek)
+      });
+      currentWeek.setDate(currentWeek.getDate() + 7);
+    }
+
+    return weeks;
+  };
+
+  const formatWeekOption = (date: Date, weekNumber: number) => {
+    const endOfWeek = new Date(date);
+    endOfWeek.setDate(date.getDate() + 6);
+    
+    return `Semaine ${weekNumber} (${formatDateToFrench(date, { day: 'numeric', month: 'long' })} - ${formatDateToFrench(endOfWeek, { day: 'numeric', month: 'long' })})`;
+  };
+
+  const handleCopyWeek = async () => {
     try {
       setIsLoading(true);
-      const currentYear = new Date().getFullYear();
-      const sourceDate = new Date(currentYear, 0, 1 + (sourceWeekNumber - 1) * 7);
-      const day = sourceDate.getDay();
-      const diff = day === 0 ? -6 : 1 - day;
-      sourceDate.setDate(sourceDate.getDate() + diff);
+      
+      if (!selectedSourceDate) {
+        throw new Error('Aucune semaine source sélectionnée');
+      }
+
+      // Calculer la date de début de la semaine source
+      const sourceStartDate = new Date(selectedSourceDate);
+      // S'assurer que c'est un lundi
+      const dayOfWeek = sourceStartDate.getDay();
+      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      sourceStartDate.setDate(sourceStartDate.getDate() + diff);
+
+      console.log('Dates de copie:', {
+        sourceStartDate: sourceStartDate.toISOString().split('T')[0],
+        targetStartDate: weekDates[0].toISOString().split('T')[0],
+        sourceDayOfWeek: sourceStartDate.getDay(),
+        targetDayOfWeek: weekDates[0].getDay()
+      });
 
       const result = await copyWeekSchedules(
-        sourceDate.toISOString().split('T')[0],
+        sourceStartDate.toISOString().split('T')[0],
         weekDates[0].toISOString().split('T')[0]
       );
 
-      if (result) {
-        setSchedules(result.schedules || []);
+      console.log('Résultat de la copie:', result);
+
+      // Recharger les données des deux semaines
+      const [sourceWeekData, targetWeekData] = await Promise.all([
+        getSchedules(
+          sourceStartDate.toISOString().split('T')[0],
+          new Date(sourceStartDate.getTime() + 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        ),
+        getSchedules(
+          weekDates[0].toISOString().split('T')[0],
+          weekDates[6].toISOString().split('T')[0]
+        )
+      ]);
+
+      // Mettre à jour les données
+      setSchedules(targetWeekData);
+      
+      // Recharger les horaires d'ouverture
+      if (onScheduleChange) {
+        onScheduleChange();
       }
 
-      if (onScheduleChange) onScheduleChange();
-    } catch (error) {
-      console.error('Erreur lors de la copie de la semaine:', error);
+      setShowCopyModal(false);
+      setSelectedSourceDate(null);
+    } catch (error: any) {
+      console.error('Erreur détaillée lors de la copie de la semaine:', error);
+      let message = 'Une erreur est survenue lors de la copie de la semaine';
+      
+      if (error.message) {
+        message += ': ' + error.message;
+      }
+      
+      alert(message);
     } finally {
       setIsLoading(false);
-      setShowCopyModal(false);
     }
   };
 
   const handleDeleteWeek = async () => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer tous les plannings de cette semaine ?')) {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette semaine ?')) {
       return;
     }
 
     try {
       setIsLoading(true);
-      await deleteWeekSchedules(weekDates[0].toISOString().split('T')[0]);
-      if (onScheduleChange) onScheduleChange();
-      loadSchedules();
+      const startDate = weekDates[0].toISOString().split('T')[0];
+      await deleteWeekSchedules(startDate);
+      
+      // Recharger les données
+      await loadSchedules();
+      if (onScheduleChange) {
+        onScheduleChange();
+      }
     } catch (error) {
       console.error('Erreur lors de la suppression de la semaine:', error);
+      alert('Une erreur est survenue lors de la suppression de la semaine');
     } finally {
       setIsLoading(false);
     }
   };
 
-  useImperativeHandle(ref, () => ({
+  // Exposer les méthodes via la ref
+  React.useImperativeHandle(ref, () => ({
     handleCopyWeek: () => setShowCopyModal(true),
-    handleDeleteWeek: () => handleDeleteWeek()
-  }), []);
+    handleDeleteWeek
+  }));
+
+  if (isLoading) {
+    return <div>Chargement...</div>;
+  }
 
   if (!employees.length) {
     return null;
@@ -198,11 +537,24 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
         <thead>
           <tr>
             <th className="p-4 text-left">Employé</th>
-            {weekDates.map((date) => (
-              <th key={date.toISOString()} className="p-4 text-center">
-                {formatDateToFrench(date, { weekday: 'long', day: 'numeric' })}
-              </th>
-            ))}
+            {weekDates.map((date) => {
+              const defaultHours = getDefaultStoreHours(date);
+
+              return (
+                <th key={date.toISOString()} className="p-4 text-center">
+                  <div>{formatDateToFrench(date, { weekday: 'long', day: 'numeric' })}</div>
+                  <StoreHoursCell
+                    date={date}
+                    defaultHours={defaultHours}
+                    storeHours={storeHours}
+                    onStoreHoursChange={(newStoreHours) => {
+                      setStoreHours(newStoreHours);
+                      if (onScheduleChange) onScheduleChange();
+                    }}
+                  />
+                </th>
+              );
+            })}
             <th className="p-4 text-center">Total</th>
           </tr>
         </thead>
@@ -248,14 +600,14 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
                       closed 
                         ? 'bg-gray-100 cursor-not-allowed' 
                         : 'cursor-pointer hover:bg-blue-500 hover:text-white'
-                    } ${closed ? 'bg-gray-100' : ''}`}
+                    }`}
                     onClick={() => !closed && handleCellClick(employee.id, date)}
                   >
                     {!closed && (
-                      schedule.isPresent ? (
-                        timeSlot ? (
+                      schedule?.isPresent ? (
+                        schedule?.timeSlotId ? (
                           <span className="text-black">
-                            {formatTimeForDisplay(timeSlot.start)} - {formatTimeForDisplay(timeSlot.end)}
+                            {formatTimeForDisplay(timeSlot?.start || '')} - {formatTimeForDisplay(timeSlot?.end || '')}
                           </span>
                         ) : null
                       ) : (
@@ -277,74 +629,101 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
         </tbody>
       </table>
 
-      {selectedCell && createPortal(
+      {selectedCell && (
         <ScheduleModal
-          isOpen={true}
+          isOpen={!!selectedCell}
           onClose={() => setSelectedCell(null)}
           onPrevious={() => {
-            const prevDate = new Date(selectedCell.date);
-            prevDate.setDate(prevDate.getDate() - 1);
-            if (!isStoreClosed(prevDate)) {
-              setSelectedCell({ ...selectedCell, date: prevDate });
+            const currentIndex = weekDates.findIndex(d => d.getTime() === selectedCell.date.getTime());
+            if (currentIndex > 0) {
+              handleCellClick(selectedCell.employeeId, weekDates[currentIndex - 1]);
             }
           }}
           onNext={() => {
-            const nextDate = new Date(selectedCell.date);
-            nextDate.setDate(nextDate.getDate() + 1);
-            if (!isStoreClosed(nextDate)) {
-              setSelectedCell({ ...selectedCell, date: nextDate });
+            const currentIndex = weekDates.findIndex(d => d.getTime() === selectedCell.date.getTime());
+            if (currentIndex < weekDates.length - 1) {
+              handleCellClick(selectedCell.employeeId, weekDates[currentIndex + 1]);
             }
           }}
-          employeeId={selectedCell.employeeId}
+          onSave={(data) => {
+            const schedule = {
+              ...data,
+              employeeId: selectedCell.employeeId,
+              date: selectedCell.date.toISOString().split('T')[0],
+            };
+            handleScheduleChange(schedule);
+          }}
           date={selectedCell.date}
-          schedule={getScheduleForCell(selectedCell.employeeId, selectedCell.date)}
+          employeeName={employees.find(e => e.id === selectedCell.employeeId)?.name || ''}
           timeSlots={timeSlots}
           absenceTypes={absenceTypes}
-          onSave={handleScheduleChange}
-        />,
-        document.body
+          currentSchedule={getScheduleForCell(selectedCell.employeeId, selectedCell.date)}
+        />
       )}
 
       {showCopyModal && createPortal(
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-lg font-semibold mb-4">Quelle semaine souhaitez-vous copier ?</h2>
-            <div className="mb-4">
-              <label htmlFor="weekNumber" className="block text-sm font-medium text-gray-700">
-                Numéro de semaine
-              </label>
-              <input
-                type="number"
-                id="weekNumber"
-                min="1"
-                max="53"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                defaultValue={getWeekNumber(new Date())}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const input = e.target as HTMLInputElement;
-                    handleCopyWeek(parseInt(input.value));
-                  }
-                }}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowCopyModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                Annuler
-              </button>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Copier une semaine</h2>
               <button
                 onClick={() => {
-                  const input = document.getElementById('weekNumber') as HTMLInputElement;
-                  handleCopyWeek(parseInt(input.value));
+                  setShowCopyModal(false);
+                  setSelectedSourceDate(null);
                 }}
-                disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600 disabled:opacity-50"
+                className="p-2 hover:bg-gray-100 rounded-full"
               >
-                {isLoading ? 'Copie en cours...' : 'Copier'}
+                <X className="w-5 h-5" />
               </button>
+            </div>
+            
+            <div className="space-y-4">
+              <p className="text-gray-600">
+                Sélectionnez la semaine à copier vers la semaine du {formatDateToFrench(weekDates[0], { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="sourceWeek" className="block text-sm font-medium text-gray-700 mb-1">
+                    Sélectionner la semaine source
+                  </label>
+                  <select
+                    id="sourceWeek"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    onChange={(e) => {
+                      const selectedDate = new Date(e.target.value);
+                      setSelectedSourceDate(selectedDate);
+                    }}
+                    value={selectedSourceDate ? selectedSourceDate.toISOString() : ''}
+                  >
+                    <option value="">Sélectionnez une semaine</option>
+                    {getAvailableWeeks().map(({ date, weekNumber }) => (
+                      <option key={date.toISOString()} value={date.toISOString()}>
+                        {formatWeekOption(date, weekNumber)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-4">
+                  <button
+                    onClick={() => {
+                      setShowCopyModal(false);
+                      setSelectedSourceDate(null);
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleCopyWeek}
+                    disabled={!selectedSourceDate || isLoading}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? 'Copie en cours...' : 'Copier la semaine'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>,

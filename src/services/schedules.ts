@@ -13,7 +13,10 @@ export async function getSchedules(startDate: string, endDate: string) {
     .gte('date', startDate)
     .lte('date', endDate);
     
-  if (error) throw error;
+  if (error) {
+    console.error('Erreur lors de la récupération des plannings:', error);
+    throw error;
+  }
   return data || [];
 }
 
@@ -35,130 +38,171 @@ export async function upsertSchedule(schedule: Schedule) {
     })
     .select();
 
-  if (error) throw error;
+  if (error) {
+    console.error('Erreur lors de l\'insertion du planning:', error);
+    throw error;
+  }
   return data?.[0];
 }
 
 // Copier une semaine de planning
 export async function copyWeekSchedules(sourceStartDate: string, targetStartDate: string) {
-  // Récupérer les plannings de la semaine source
-  const sourceEndDate = new Date(sourceStartDate);
-  sourceEndDate.setDate(sourceEndDate.getDate() + 6);
-  const sourceEndDateStr = sourceEndDate.toISOString().split('T')[0];
+  console.log('Début de la copie de semaine:', { sourceStartDate, targetStartDate });
   
-  const targetEndDate = new Date(targetStartDate);
-  targetEndDate.setDate(targetEndDate.getDate() + 6);
-  const targetEndDateStr = targetEndDate.toISOString().split('T')[0];
-  
-  // Récupérer à la fois les plannings et les horaires d'ouverture
-  const [schedulesResponse, storeHoursResponse] = await Promise.all([
-    supabase
-      .from('schedules')
-      .select('*')
-      .gte('date', sourceStartDate)
-      .lte('date', sourceEndDateStr),
+  try {
+    // Calculer les dates de fin
+    const sourceEndDate = new Date(sourceStartDate);
+    sourceEndDate.setDate(sourceEndDate.getDate() + 6);
+    const sourceEndDateStr = sourceEndDate.toISOString().split('T')[0];
     
-    supabase
-      .from('store_hours')
-      .select('id,date,is_closed,time_slot_id')
-      .gte('date', sourceStartDate)
-      .lte('date', sourceEndDateStr)
-  ]);
+    const targetEndDate = new Date(targetStartDate);
+    targetEndDate.setDate(targetEndDate.getDate() + 6);
+    const targetEndDateStr = targetEndDate.toISOString().split('T')[0];
 
-  if (schedulesResponse.error) throw schedulesResponse.error;
-  if (storeHoursResponse.error) throw storeHoursResponse.error;
+    console.log('Dates calculées:', {
+      sourceStartDate,
+      sourceEndDateStr,
+      targetStartDate,
+      targetEndDateStr
+    });
+    
+    // Récupérer les données source
+    const [schedulesResponse, storeHoursResponse] = await Promise.all([
+      supabase
+        .from('schedules')
+        .select('*')
+        .gte('date', sourceStartDate)
+        .lte('date', sourceEndDateStr),
+      
+      supabase
+        .from('store_hours')
+        .select('*')
+        .gte('date', sourceStartDate)
+        .lte('date', sourceEndDateStr)
+    ]);
 
-  const sourceSchedules = schedulesResponse.data || [];
-  const sourceStoreHours = storeHoursResponse.data || [];
+    if (schedulesResponse.error) throw schedulesResponse.error;
+    if (storeHoursResponse.error) throw storeHoursResponse.error;
 
-  // Préparer les nouveaux plannings
-  const targetSchedules = sourceSchedules.map(schedule => {
-    const sourceDate = new Date(schedule.date);
-    const sourceStartDateObj = new Date(sourceStartDate);
-    const daysDiff = Math.floor((sourceDate.getTime() - sourceStartDateObj.getTime()) / (1000 * 60 * 60 * 24));
+    const sourceSchedules = schedulesResponse.data || [];
+    const sourceStoreHours = storeHoursResponse.data || [];
 
-    const targetDate = new Date(targetStartDate);
-    targetDate.setDate(targetDate.getDate() + daysDiff);
+    console.log('Données source:', {
+      schedules: sourceSchedules,
+      storeHours: sourceStoreHours
+    });
+
+    // Créer les nouvelles dates
+    const targetSchedules = sourceSchedules.map(schedule => {
+      const sourceDate = new Date(schedule.date);
+      const daysFromStart = Math.floor((sourceDate.getTime() - new Date(sourceStartDate).getTime()) / (1000 * 60 * 60 * 24));
+      
+      const targetDate = new Date(targetStartDate);
+      targetDate.setDate(targetDate.getDate() + daysFromStart);
+      
+      // Copier tous les champs sauf l'ID
+      const { id, created_at, ...scheduleWithoutId } = schedule;
+      return {
+        ...scheduleWithoutId,
+        date: targetDate.toISOString().split('T')[0]
+      };
+    });
+
+    const targetStoreHours = sourceStoreHours.map(storeHour => {
+      const sourceDate = new Date(storeHour.date);
+      const daysFromStart = Math.floor((sourceDate.getTime() - new Date(sourceStartDate).getTime()) / (1000 * 60 * 60 * 24));
+      
+      const targetDate = new Date(targetStartDate);
+      targetDate.setDate(targetDate.getDate() + daysFromStart);
+      
+      // Copier tous les champs sauf l'ID
+      const { id, created_at, ...storeHourWithoutId } = storeHour;
+      return {
+        ...storeHourWithoutId,
+        date: targetDate.toISOString().split('T')[0]
+      };
+    });
+
+    console.log('Données à copier:', {
+      schedules: targetSchedules,
+      storeHours: targetStoreHours
+    });
+
+    // Supprimer d'abord les données existantes de la semaine cible
+    await Promise.all([
+      supabase
+        .from('schedules')
+        .delete()
+        .gte('date', targetStartDate)
+        .lte('date', targetEndDateStr),
+      
+      supabase
+        .from('store_hours')
+        .delete()
+        .gte('date', targetStartDate)
+        .lte('date', targetEndDateStr)
+    ]);
+
+    // Insérer les nouvelles données
+    const [newSchedules, newStoreHours] = await Promise.all([
+      supabase
+        .from('schedules')
+        .insert(targetSchedules)
+        .select(),
+      
+      supabase
+        .from('store_hours')
+        .insert(targetStoreHours)
+        .select()
+    ]);
+
+    if (newSchedules.error) throw newSchedules.error;
+    if (newStoreHours.error) throw newStoreHours.error;
+
+    console.log('Copie terminée avec succès:', {
+      schedules: newSchedules.data,
+      storeHours: newStoreHours.data
+    });
 
     return {
-      employeeId: schedule.employeeId,
-      date: targetDate.toISOString().split('T')[0],
-      isPresent: schedule.isPresent,
-      timeSlotId: schedule.timeSlotId,
-      absenceTypeId: schedule.absenceTypeId
+      schedules: newSchedules.data,
+      storeHours: newStoreHours.data
     };
-  });
-
-  // Préparer les nouveaux horaires d'ouverture
-  const targetStoreHours = sourceStoreHours.map(storeHour => {
-    const sourceDate = new Date(storeHour.date);
-    const sourceStartDateObj = new Date(sourceStartDate);
-    const daysDiff = Math.floor((sourceDate.getTime() - sourceStartDateObj.getTime()) / (1000 * 60 * 60 * 24));
-
-    const targetDate = new Date(targetStartDate);
-    targetDate.setDate(targetDate.getDate() + daysDiff);
-
-    return {
-      date: targetDate.toISOString().split('T')[0],
-      is_closed: storeHour.is_closed,
-      time_slot_id: storeHour.time_slot_id
-    };
-  });
-
-  // Supprimer d'abord les données existantes de la semaine cible
-  await Promise.all([
-    supabase
-      .from('schedules')
-      .delete()
-      .gte('date', targetStartDate)
-      .lte('date', targetEndDateStr),
-    supabase
-      .from('store_hours')
-      .delete()
-      .gte('date', targetStartDate)
-      .lte('date', targetEndDateStr)
-  ]);
-
-  // Insérer les nouveaux plannings et horaires d'ouverture
-  const [scheduleInsertResponse, storeHoursInsertResponse] = await Promise.all([
-    supabase
-      .from('schedules')
-      .insert(targetSchedules)
-      .select(),
-    
-    supabase
-      .from('store_hours')
-      .insert(targetStoreHours)
-      .select()
-  ]);
-
-  if (scheduleInsertResponse.error) {
-    console.error('Erreur lors de l\'insertion des plannings:', scheduleInsertResponse.error);
-    throw scheduleInsertResponse.error;
+  } catch (error) {
+    console.error('Erreur lors de la copie:', error);
+    throw error;
   }
-  if (storeHoursInsertResponse.error) {
-    console.error('Erreur lors de l\'insertion des horaires:', storeHoursInsertResponse.error);
-    throw storeHoursInsertResponse.error;
-  }
-
-  return {
-    schedules: scheduleInsertResponse.data,
-    storeHours: storeHoursInsertResponse.data
-  };
 }
 
 // Supprimer une semaine de planning
 export async function deleteWeekSchedules(startDate: string) {
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + 6);
-  
-  const { error } = await supabase
-    .from('schedules')
-    .delete()
-    .gte('date', startDate)
-    .lte('date', endDate.toISOString().split('T')[0]);
+  const endDateStr = endDate.toISOString().split('T')[0];
 
-  if (error) throw error;
+  // Supprimer à la fois les plannings et les horaires d'ouverture
+  const [schedulesResponse, storeHoursResponse] = await Promise.all([
+    supabase
+      .from('schedules')
+      .delete()
+      .gte('date', startDate)
+      .lte('date', endDateStr),
+    
+    supabase
+      .from('store_hours')
+      .delete()
+      .gte('date', startDate)
+      .lte('date', endDateStr)
+  ]);
+
+  if (schedulesResponse.error) {
+    console.error('Erreur lors de la suppression des plannings:', schedulesResponse.error);
+    throw schedulesResponse.error;
+  }
+  if (storeHoursResponse.error) {
+    console.error('Erreur lors de la suppression des horaires:', storeHoursResponse.error);
+    throw storeHoursResponse.error;
+  }
 }
 
 // Validation helpers
