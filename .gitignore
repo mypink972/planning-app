@@ -63,3 +63,7 @@ yarn-error.log*
 
 # Electron
 *.asar
+
+# Tokens and secrets
+Token github
+**/Token github
