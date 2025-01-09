@@ -7,7 +7,7 @@ const development: Config = {
 };
 
 const production: Config = {
-  apiUrl: 'https://planning-mtz-server.onrender.com'
+  apiUrl: 'https://planning-server.onrender.com'
 };
 
 const config: Config = process.env.NODE_ENV === 'production' ? production : development;

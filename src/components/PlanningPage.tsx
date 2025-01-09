@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, FileDown, Mail } from 'lucide-react';
 import { getWeekDates, getWeekNumber, formatDateToFrench } from '../utils/dates';
 import { exportTableToPDF } from '../utils/pdf';
-import WeeklySchedule from './planning/WeeklySchedule';
+import WeeklySchedule, { WeeklyScheduleHandle } from './planning/WeeklySchedule';
 import StoreHoursCell from './planning/StoreHoursCell';
 import MonthlyTotal from './planning/MonthlyTotal';
 import type { StoreHours } from '../types/storeHours';
@@ -17,7 +17,7 @@ export default function PlanningPage() {
   const [sending, setSending] = useState(false);
   const weekDates = getWeekDates(currentDate);
   const tableRef = useRef<HTMLTableElement>(null);
-  const weeklyScheduleRef = useRef<{ handleCopyWeek: () => void; handleDeleteWeek: () => void; }>(null);
+  const weeklyScheduleRef = useRef<WeeklyScheduleHandle>(null);
 
   useEffect(() => {
     fetchStoreHours();
@@ -43,8 +43,27 @@ export default function PlanningPage() {
   };
 
   const handleExportPDF = async () => {
-    if (tableRef.current) {
-      await exportTableToPDF(tableRef.current, currentDate);
+    console.log('Début de handleExportPDF');
+    console.log('tableRef:', tableRef.current);
+    
+    try {
+      console.log('Appel de exportTableToPDF...');
+      const pdfBytes = await exportTableToPDF(tableRef.current, currentDate);
+      
+      // Créer un blob à partir des données PDF
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      
+      // Créer un lien temporaire pour télécharger le PDF
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Planning_${formatDateToFrench(currentDate, { month: 'long', year: 'numeric' })}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Erreur détaillée lors de l\'export PDF:', error);
     }
   };
 
@@ -153,53 +172,16 @@ export default function PlanningPage() {
         </button>
       </div>
 
-      <div className="text-center mb-6">
-        <span className="text-2xl text-gray-600">
-          Semaine {getWeekNumber(currentDate)}
-        </span>
-      </div>
-
-      <div className="bg-white rounded-lg shadow overflow-x-auto">
-        <table ref={tableRef} className="w-full min-w-max">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="p-4"></th>
-              {weekDates.map((date) => (
-                <th key={date.toISOString()} className="p-4 text-center font-semibold">
-                  <div className="text-sm">
-                    {formatDateToFrench(date, { weekday: 'long' })}
-                  </div>
-                  <div className="text-2xl mt-1">
-                    {date.getDate()}
-                  </div>
-                </th>
-              ))}
-              <th className="p-4"></th>
-            </tr>
-            <tr>
-              <th className="p-4 text-left font-medium text-gray-500">
-                Horaires d'ouverture
-              </th>
-              {weekDates.map((date) => (
-                <th key={date.toISOString()} className="p-4">
-                  <StoreHoursCell
-                    date={date}
-                    value={getStoreHours(date)}
-                    onChange={(value) => handleStoreHoursChange(date, value)}
-                  />
-                </th>
-              ))}
-              <th className="p-4 text-right font-medium text-gray-500">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <WeeklySchedule 
-              weekDates={weekDates} 
-              storeHours={storeHours}
-              onScheduleChange={handleScheduleChange} 
-            />
-          </tbody>
-        </table>
+      <div className="overflow-x-auto">
+        <div className="min-w-max">
+          <WeeklySchedule
+            ref={weeklyScheduleRef}
+            weekDates={weekDates}
+            storeHours={storeHours}
+            onScheduleChange={handleScheduleChange}
+            tableRef={tableRef}
+          />
+        </div>
       </div>
 
       <MonthlyTotal 

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Copy, Trash2 } from 'lucide-react';
 import type { Employee, Schedule, TimeSlot, AbsenceType } from '../../types';
 import ScheduleModal from './ScheduleModal';
-import { calculateTotalHours } from '../../utils/dates';
+import { calculateTotalHours, formatDateToFrench } from '../../utils/dates';
 import { formatTimeForDisplay } from '../../utils/time';
 import { getEmployees } from '../../services/employees';
 import { getTimeSlots } from '../../services/timeSlots';
@@ -19,12 +19,20 @@ interface WeeklyScheduleProps {
     timeSlotId?: string;
   }[];
   onScheduleChange?: () => void;
+  tableRef?: React.RefObject<HTMLTableElement>;
 }
 
-export default forwardRef(function WeeklySchedule(
-  { weekDates, storeHours, onScheduleChange }: WeeklyScheduleProps,
-  ref
-) {
+export interface WeeklyScheduleHandle {
+  handleCopyWeek: () => void;
+  handleDeleteWeek: () => void;
+}
+
+export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function WeeklySchedule({
+  weekDates,
+  storeHours,
+  onScheduleChange,
+  tableRef
+}: WeeklyScheduleProps, ref) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [absenceTypes, setAbsenceTypes] = useState<AbsenceType[]>([]);
@@ -74,13 +82,11 @@ export default forwardRef(function WeeklySchedule(
   }
 
   const isStoreClosed = (date: Date) => {
-    // Vérifier d'abord les horaires personnalisés
     const storeHour = storeHours.find(
       (sh) => sh.date === date.toISOString().split('T')[0]
     );
     if (storeHour) return storeHour.isClosed;
 
-    // Si pas d'horaires personnalisés, vérifier les horaires par défaut
     const defaultHours = getDefaultStoreHours(date);
     return defaultHours === 'closed';
   };
@@ -114,7 +120,6 @@ export default forwardRef(function WeeklySchedule(
   const handleScheduleChange = async (schedule: Schedule) => {
     try {
       await upsertSchedule(schedule);
-      // Mettre à jour localement au lieu de recharger
       setSchedules(prevSchedules => {
         const newSchedules = prevSchedules.filter(s => 
           s.employeeId !== schedule.employeeId || 
@@ -122,7 +127,7 @@ export default forwardRef(function WeeklySchedule(
         );
         return [...newSchedules, schedule];
       });
-      onScheduleChange?.();
+      if (onScheduleChange) onScheduleChange();
     } catch (error) {
       console.error('Erreur lors de la mise à jour du planning:', error);
     }
@@ -134,14 +139,11 @@ export default forwardRef(function WeeklySchedule(
     }
   };
 
-  // Fonction pour copier une semaine
   const handleCopyWeek = async (sourceWeekNumber: number) => {
     try {
       setIsLoading(true);
-      // Calculer la date de début de la semaine source
       const currentYear = new Date().getFullYear();
       const sourceDate = new Date(currentYear, 0, 1 + (sourceWeekNumber - 1) * 7);
-      // Ajuster au lundi de la semaine
       const day = sourceDate.getDay();
       const diff = day === 0 ? -6 : 1 - day;
       sourceDate.setDate(sourceDate.getDate() + diff);
@@ -151,7 +153,6 @@ export default forwardRef(function WeeklySchedule(
         weekDates[0].toISOString().split('T')[0]
       );
 
-      // Mettre à jour directement les données locales avec les données insérées
       if (result) {
         setSchedules(result.schedules || []);
       }
@@ -165,7 +166,6 @@ export default forwardRef(function WeeklySchedule(
     }
   };
 
-  // Fonction pour supprimer une semaine
   const handleDeleteWeek = async () => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer tous les plannings de cette semaine ?')) {
       return;
@@ -183,15 +183,10 @@ export default forwardRef(function WeeklySchedule(
     }
   };
 
-  // Exposer les méthodes via la ref
   useImperativeHandle(ref, () => ({
-    handleCopyWeek: () => {
-      setShowCopyModal(true);
-    },
-    handleDeleteWeek: () => {
-      handleDeleteWeek();
-    }
-  }));
+    handleCopyWeek: () => setShowCopyModal(true),
+    handleDeleteWeek: () => handleDeleteWeek()
+  }), []);
 
   if (!employees.length) {
     return null;
@@ -199,73 +194,88 @@ export default forwardRef(function WeeklySchedule(
 
   return (
     <>
-      <tr>
-        <td colSpan={9} className="pb-4">
-          <div className="flex justify-center gap-2">
-            <button
-              onClick={() => setShowCopyModal(true)}
-              disabled={isLoading}
-              className="flex items-center gap-1 px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-            >
-              <Copy size={16} />
-              Copier la semaine
-            </button>
-            <button
-              onClick={handleDeleteWeek}
-              disabled={isLoading}
-              className="flex items-center gap-1 px-2 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
-            >
-              <Trash2 size={16} />
-              Supprimer la semaine
-            </button>
-          </div>
-        </td>
-      </tr>
+      <table ref={tableRef} className="min-w-full bg-white">
+        <thead>
+          <tr>
+            <th className="p-4 text-left">Employé</th>
+            {weekDates.map((date) => (
+              <th key={date.toISOString()} className="p-4 text-center">
+                {formatDateToFrench(date, { weekday: 'long', day: 'numeric' })}
+              </th>
+            ))}
+            <th className="p-4 text-center">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colSpan={9} className="pb-4">
+              <div className="flex justify-center gap-2">
+                <button
+                  onClick={() => setShowCopyModal(true)}
+                  disabled={isLoading}
+                  className="flex items-center gap-1 px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                >
+                  <Copy size={16} />
+                  Copier la semaine
+                </button>
+                <button
+                  onClick={handleDeleteWeek}
+                  disabled={isLoading}
+                  className="flex items-center gap-1 px-2 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                >
+                  <Trash2 size={16} />
+                  Supprimer la semaine
+                </button>
+              </div>
+            </td>
+          </tr>
 
-      {employees.map((employee, index) => (
-        <tr key={employee.id} className={`border-t border-b border-gray-200 ${index % 2 === 0 ? '' : 'bg-gray-50'}`}>
-          <td className="p-4">
-            <span className="font-medium">{employee.name}</span>
-          </td>
-          {weekDates.map((date) => {
-            const schedule = getScheduleForCell(employee.id, date);
-            const timeSlot = timeSlots.find((ts) => ts.id === schedule.timeSlotId);
-            const absenceType = absenceTypes.find((at) => at.id === schedule.absenceTypeId);
-            const closed = isStoreClosed(date);
-
-            return (
-              <td
-                key={date.toISOString()}
-                className={`p-4 text-center ${
-                  closed 
-                    ? 'bg-gray-100 cursor-not-allowed' 
-                    : 'cursor-pointer hover:bg-blue-500 hover:text-white'
-                } ${closed ? 'bg-gray-100' : ''}`}
-                onClick={() => !closed && handleCellClick(employee.id, date)}
-              >
-                {!closed && (
-                  schedule.isPresent ? (
-                    timeSlot ? (
-                      <span className="text-black">
-                        {formatTimeForDisplay(timeSlot.start)} - {formatTimeForDisplay(timeSlot.end)}
-                      </span>
-                    ) : null
-                  ) : (
-                    absenceType && (
-                      <span className="text-black">
-                        {absenceType.label}
-                      </span>
-                    )
-                  )
-                )}
+          {employees.map((employee, index) => (
+            <tr key={employee.id} className={`border-t border-b border-gray-200 ${index % 2 === 0 ? '' : 'bg-gray-50'}`}>
+              <td className="p-4">
+                <span className="font-medium">{employee.name}</span>
               </td>
-            );
-          })}
-          <td className="p-4 text-right font-medium">
-            {calculateWeeklyTotal(employee.id)}h
-          </td>
-        </tr>
-      ))}
+              {weekDates.map((date) => {
+                const schedule = getScheduleForCell(employee.id, date);
+                const timeSlot = timeSlots.find((ts) => ts.id === schedule.timeSlotId);
+                const absenceType = absenceTypes.find((at) => at.id === schedule.absenceTypeId);
+                const closed = isStoreClosed(date);
+
+                return (
+                  <td
+                    key={date.toISOString()}
+                    className={`p-4 text-center ${
+                      closed 
+                        ? 'bg-gray-100 cursor-not-allowed' 
+                        : 'cursor-pointer hover:bg-blue-500 hover:text-white'
+                    } ${closed ? 'bg-gray-100' : ''}`}
+                    onClick={() => !closed && handleCellClick(employee.id, date)}
+                  >
+                    {!closed && (
+                      schedule.isPresent ? (
+                        timeSlot ? (
+                          <span className="text-black">
+                            {formatTimeForDisplay(timeSlot.start)} - {formatTimeForDisplay(timeSlot.end)}
+                          </span>
+                        ) : null
+                      ) : (
+                        absenceType && (
+                          <span className="text-black">
+                            {absenceType.label}
+                          </span>
+                        )
+                      )
+                    )}
+                  </td>
+                );
+              })}
+              <td className="p-4 text-right font-medium">
+                {calculateWeeklyTotal(employee.id)}h
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       {selectedCell && createPortal(
         <ScheduleModal
@@ -285,50 +295,55 @@ export default forwardRef(function WeeklySchedule(
               setSelectedCell({ ...selectedCell, date: nextDate });
             }
           }}
-          onSave={(data) => {
-            handleScheduleChange({
-              ...data,
-              employeeId: selectedCell.employeeId,
-              date: selectedCell.date.toISOString().split('T')[0],
-            });
-            setSelectedCell(null);
-          }}
+          employeeId={selectedCell.employeeId}
           date={selectedCell.date}
-          employeeName={employees.find((e) => e.id === selectedCell.employeeId)?.name || ''}
+          schedule={getScheduleForCell(selectedCell.employeeId, selectedCell.date)}
           timeSlots={timeSlots}
           absenceTypes={absenceTypes}
-          currentSchedule={getScheduleForCell(selectedCell.employeeId, selectedCell.date)}
+          onSave={handleScheduleChange}
         />,
         document.body
       )}
 
-      {/* Modal de sélection de la semaine cible */}
       {showCopyModal && createPortal(
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
             <h2 className="text-lg font-semibold mb-4">Quelle semaine souhaitez-vous copier ?</h2>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Numéro de semaine à copier
+              <label htmlFor="weekNumber" className="block text-sm font-medium text-gray-700">
+                Numéro de semaine
               </label>
-              <select
-                className="w-full p-2 border rounded"
-                onChange={(e) => handleCopyWeek(parseInt(e.target.value))}
-              >
-                <option value="">Sélectionnez une semaine</option>
-                {Array.from({ length: 52 }, (_, i) => i + 1).map(weekNum => (
-                  <option key={weekNum} value={weekNum}>
-                    Semaine {weekNum}
-                  </option>
-                ))}
-              </select>
+              <input
+                type="number"
+                id="weekNumber"
+                min="1"
+                max="53"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                defaultValue={getWeekNumber(new Date())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const input = e.target as HTMLInputElement;
+                    handleCopyWeek(parseInt(input.value));
+                  }
+                }}
+              />
             </div>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowCopyModal(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
               >
                 Annuler
+              </button>
+              <button
+                onClick={() => {
+                  const input = document.getElementById('weekNumber') as HTMLInputElement;
+                  handleCopyWeek(parseInt(input.value));
+                }}
+                disabled={isLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600 disabled:opacity-50"
+              >
+                {isLoading ? 'Copie en cours...' : 'Copier'}
               </button>
             </div>
           </div>
