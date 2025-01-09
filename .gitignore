@@ -31,6 +31,14 @@ node_modules/
 # Testing
 coverage/
 
+# Build and release
+release/
+dist/
+build/
+*.dmg
+*.app
+*.asar
+
 # Production
 build/
 dist/
