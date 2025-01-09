@@ -1,12 +1,8 @@
 export interface StoreHours {
-  id?: string;
+  id?: number;
   date: string;
   isClosed: boolean;
   timeSlotId?: string;
 }
 
-export interface StoreHoursInput {
-  date: string;
-  isClosed: boolean;
-  timeSlotId?: string;
-}
+export type StoreHoursInput = Omit<StoreHours, 'id'>;

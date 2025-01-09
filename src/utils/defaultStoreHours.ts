@@ -18,17 +18,7 @@ export const DEFAULT_STORE_HOURS: WeekdayHours = {
   6: { start: '09:00', end: '20:30' }, // Samedi
 };
 
-export function getDefaultStoreHours(date: Date): string {
+export function getDefaultStoreHours(date: Date): DefaultHours | 'closed' {
   const dayOfWeek = date.getDay();
-  const hours = DEFAULT_STORE_HOURS[dayOfWeek];
-
-  if (hours === 'closed') {
-    return 'closed';
-  }
-
-  const { start, end } = hours;
-  const [startHour, startMinute] = start.split(':');
-  const [endHour, endMinute] = end.split(':');
-  
-  return `${startHour}:${startMinute}:${endHour}:${endMinute}`;
+  return DEFAULT_STORE_HOURS[dayOfWeek];
 }

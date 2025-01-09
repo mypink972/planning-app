@@ -15,7 +15,6 @@ export async function getStoreHoursByWeek(startDate: Date, endDate: Date): Promi
     return [];
   }
 
-  // Convert snake_case to camelCase
   return (data || []).map(item => ({
     id: item.id,
     date: item.date,
@@ -25,7 +24,6 @@ export async function getStoreHoursByWeek(startDate: Date, endDate: Date): Promi
 }
 
 export async function upsertStoreHours(storeHours: StoreHoursInput): Promise<StoreHours | null> {
-  // Convert camelCase to snake_case for database
   const dbData = {
     date: storeHours.date,
     is_closed: storeHours.isClosed,
@@ -45,7 +43,6 @@ export async function upsertStoreHours(storeHours: StoreHoursInput): Promise<Sto
     return null;
   }
 
-  // Convert back to camelCase for frontend
   return {
     id: data.id,
     date: data.date,
