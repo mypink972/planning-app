@@ -46,22 +46,26 @@ export default function ScheduleModal({
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
+  const saveData = () => {
     onSave({
       isPresent,
       timeSlotId: selectedTimeSlot || undefined,
       absenceTypeId: selectedAbsenceType || undefined,
     });
+  };
+
+  const handleSave = () => {
+    saveData();
     onClose();
   };
 
   const handlePrevious = () => {
-    handleSave();
+    saveData();
     onPrevious();
   };
 
   const handleNext = () => {
-    handleSave();
+    saveData();
     onNext();
   };
 

@@ -310,7 +310,7 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
     if (weekDates.length > 0) {
       loadSchedules();
     }
-  }, [weekDates, storeHours]);
+  }, [weekDates]);
 
   async function loadSchedules() {
     try {
@@ -361,7 +361,7 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
     }, 0);
   };
 
-  const handleScheduleChange = async (schedule: Schedule) => {
+  const handleScheduleChange = async (schedule: Schedule, closeModal: boolean = true) => {
     try {
       await upsertSchedule(schedule);
       
@@ -373,12 +373,11 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
         );
         return [...newSchedules, schedule];
       });
-
-      // Recharger les données pour s'assurer de la synchronisation
-      await loadSchedules();
       
-      // Fermer le modal
-      setSelectedCell(null);
+      // Fermer le modal seulement si demandé
+      if (closeModal) {
+        setSelectedCell(null);
+      }
       
       // Notifier le parent si nécessaire
       if (onScheduleChange) onScheduleChange();
@@ -636,13 +635,21 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
           onPrevious={() => {
             const currentIndex = weekDates.findIndex(d => d.getTime() === selectedCell.date.getTime());
             if (currentIndex > 0) {
-              handleCellClick(selectedCell.employeeId, weekDates[currentIndex - 1]);
+              const newDate = weekDates[currentIndex - 1];
+              setSelectedCell({
+                ...selectedCell,
+                date: newDate
+              });
             }
           }}
           onNext={() => {
             const currentIndex = weekDates.findIndex(d => d.getTime() === selectedCell.date.getTime());
             if (currentIndex < weekDates.length - 1) {
-              handleCellClick(selectedCell.employeeId, weekDates[currentIndex + 1]);
+              const newDate = weekDates[currentIndex + 1];
+              setSelectedCell({
+                ...selectedCell,
+                date: newDate
+              });
             }
           }}
           onSave={(data) => {
@@ -651,7 +658,7 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
               employeeId: selectedCell.employeeId,
               date: selectedCell.date.toISOString().split('T')[0],
             };
-            handleScheduleChange(schedule);
+            handleScheduleChange(schedule, false);
           }}
           date={selectedCell.date}
           employeeName={employees.find(e => e.id === selectedCell.employeeId)?.name || ''}
