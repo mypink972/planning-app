@@ -43,7 +43,7 @@ export default function PlanningPage() {
 
   const handleExportPDF = async () => {
     if (tableRef.current) {
-      await exportTableToPDF(tableRef.current, currentDate);
+      await exportTableToPDF(tableRef.current, currentDate, true);
     }
   };
 
@@ -54,8 +54,8 @@ export default function PlanningPage() {
         throw new Error('La référence de la table est invalide');
       }
 
-      // Générer le PDF
-      const pdfData = await exportTableToPDF(tableRef.current, currentDate);
+      // Générer le PDF sans téléchargement automatique
+      const pdfData = await exportTableToPDF(tableRef.current, currentDate, false);
       
       // Récupérer la liste des employés
       const employees = await getEmployees();

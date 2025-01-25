@@ -20,7 +20,8 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.orange.fr',

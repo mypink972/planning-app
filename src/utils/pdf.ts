@@ -2,7 +2,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { formatDateToFrench } from './dates';
 
-export async function exportTableToPDF(tableElement: HTMLTableElement | null, currentDate: Date) {
+export async function exportTableToPDF(tableElement: HTMLTableElement | null, currentDate: Date, autoDownload: boolean = true) {
   try {
     console.log('Début de l\'export PDF');
     
@@ -74,10 +74,12 @@ export async function exportTableToPDF(tableElement: HTMLTableElement | null, cu
     console.log('Ajout de l\'image au PDF');
     pdf.addImage(imgData, 'PNG', 10, 20, finalWidth, finalHeight);
     
-    // Télécharger le PDF
-    console.log('Téléchargement du PDF');
-    const fileName = `planning_${formatDateToFrench(currentDate, { month: 'long', year: 'numeric' }).toLowerCase().replace(/ /g, '_')}.pdf`;
-    pdf.save(fileName);
+    // Télécharger le PDF seulement si autoDownload est true
+    if (autoDownload) {
+      console.log('Téléchargement du PDF');
+      const fileName = `planning_${formatDateToFrench(currentDate, { month: 'long', year: 'numeric' }).toLowerCase().replace(/ /g, '_')}.pdf`;
+      pdf.save(fileName);
+    }
     
     // Convertir le PDF en tableau d'octets pour l'envoi par email si nécessaire
     console.log('Conversion en tableau d\'octets');
