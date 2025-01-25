@@ -74,7 +74,12 @@ export async function exportTableToPDF(tableElement: HTMLTableElement | null, cu
     console.log('Ajout de l\'image au PDF');
     pdf.addImage(imgData, 'PNG', 10, 20, finalWidth, finalHeight);
     
-    // Convertir le PDF en tableau d'octets
+    // Télécharger le PDF
+    console.log('Téléchargement du PDF');
+    const fileName = `planning_${formatDateToFrench(currentDate, { month: 'long', year: 'numeric' }).toLowerCase().replace(/ /g, '_')}.pdf`;
+    pdf.save(fileName);
+    
+    // Convertir le PDF en tableau d'octets pour l'envoi par email si nécessaire
     console.log('Conversion en tableau d\'octets');
     const pdfData = pdf.output('arraybuffer');
     
