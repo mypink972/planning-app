@@ -50,7 +50,21 @@ export default function PlanningPage() {
   const handleSendEmails = async () => {
     setSending(true);
     try {
-      await sendPlanningEmails(weekDates[0]);
+      if (!tableRef.current) {
+        throw new Error('La référence de la table est invalide');
+      }
+
+      // Générer le PDF
+      const pdfData = await exportTableToPDF(tableRef.current, currentDate);
+      
+      // Récupérer la liste des employés
+      const employees = await getEmployees();
+      
+      // Vérifier que nous avons une date valide
+      const weekStartDate = weekDates[0] || currentDate;
+      
+      // Envoyer les emails
+      await sendPlanningEmails(pdfData, employees, weekStartDate);
       alert('Emails envoyés avec succès !');
     } catch (error) {
       console.error('Error sending emails:', error);
