@@ -23,11 +23,11 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'mail.zitata.tv',
+  host: process.env.SMTP_HOST || 'smtp.orange.fr',
   port: parseInt(process.env.SMTP_PORT || '587'),
   secure: process.env.SMTP_SECURE === 'true',
   auth: {
-    user: process.env.SMTP_USER || 'technique@zitata.tv',
+    user: process.env.SMTP_USER || 'mtz.trading@orange.fr',
     pass: process.env.SMTP_PASS
   },
   tls: {
@@ -71,7 +71,7 @@ app.post('/send-planning', async (req, res) => {
         console.log('Tentative d\'envoi à:', employee.email);
         
         const mailOptions = {
-          from: 'technique@zitata.tv',
+          from: 'mtz.trading@orange.fr',
           to: employee.email,
           subject: `Planning du ${startDateStr} au ${endDateStr}`,
           text: `Bonjour ${employee.name},\n\nVeuillez trouver ci-joint votre planning pour la semaine du ${startDateStr} au ${endDateStr}.\n\nCordialement,`,
