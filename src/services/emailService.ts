@@ -36,6 +36,8 @@ export async function sendPlanningEmails(
     // Si c'est un planning mensuel, on va créer un contenu personnalisé
     if (options.isMonthly && options.month && options.year) {
       emailContent = `Veuillez trouver ci-joint votre planning pour le mois de ${options.month.toLowerCase()} ${options.year}.`;
+      // Créer un objet sans le mot "mensuel"
+      options.subject = `Planning - ${options.month} ${options.year}`;
     }
     
     const requestData = {
