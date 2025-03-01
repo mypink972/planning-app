@@ -6,7 +6,7 @@ import type { Employee, Schedule, TimeSlot, AbsenceType } from '../../types';
 import ScheduleModal from './ScheduleModal';
 import { calculateTotalHours, formatDateToFrench } from '../../utils/dates';
 import { formatTimeForDisplay } from '../../utils/time';
-import { getEmployees } from '../../services/employees';
+import { getEmployeesByStore } from '../../services/employees';
 import { getTimeSlots } from '../../services/timeSlots';
 import { getAbsenceTypes } from '../../services/absenceTypes';
 import { getSchedules, upsertSchedule, copyWeekSchedules, deleteWeekSchedules } from '../../services/schedules';
@@ -22,6 +22,8 @@ interface WeeklyScheduleProps {
   }[];
   onScheduleChange?: () => void;
   tableRef?: React.RefObject<HTMLTableElement>;
+  onStoreHoursChange: (date: Date, value: string) => Promise<void>;
+  selectedStoreId?: string;
 }
 
 export interface WeeklyScheduleHandle {
@@ -263,7 +265,9 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
   weekDates,
   storeHours: initialStoreHours,
   onScheduleChange,
-  tableRef
+  tableRef,
+  onStoreHoursChange,
+  selectedStoreId
 }, ref) {
   const [employees, setEmployees] = React.useState<Employee[]>([]);
   const [timeSlots, setTimeSlots] = React.useState<TimeSlot[]>([]);
@@ -282,7 +286,7 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
     try {
       setIsLoading(true);
       const [employeesData, timeSlotsData, absenceTypesData] = await Promise.all([
-        getEmployees(),
+        getEmployeesByStore(selectedStoreId),
         getTimeSlots(),
         getAbsenceTypes()
       ]);
@@ -300,7 +304,7 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
 
   React.useEffect(() => {
     loadInitialData();
-  }, []);
+  }, [selectedStoreId]);
 
   React.useEffect(() => {
     setStoreHours(initialStoreHours);

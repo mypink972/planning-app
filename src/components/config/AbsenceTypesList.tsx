@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { PlusCircle, Trash2 } from 'lucide-react';
 import type { AbsenceType } from '../../types';
 import { getAbsenceTypes, createAbsenceType, deleteAbsenceType } from '../../services/absenceTypes';

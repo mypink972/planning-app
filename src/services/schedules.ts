@@ -1,6 +1,56 @@
 import { supabase } from '../lib/supabase';
 import type { Schedule } from '../types';
 
+export async function getMonthlySchedules(date: Date) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  
+  // Premier jour du mois
+  const firstDay = new Date(year, month, 1);
+  const firstDayStr = firstDay.toISOString().split('T')[0];
+  
+  // Dernier jour du mois
+  const lastDay = new Date(year, month + 1, 0);
+  const lastDayStr = lastDay.toISOString().split('T')[0];
+  
+  // Récupérer les horaires
+  const schedules = await getSchedules(firstDayStr, lastDayStr);
+  
+  // Récupérer les créneaux horaires pour calculer les heures
+  const { data: timeSlots } = await supabase
+    .from('time_slots')
+    .select('id, start, end');
+  
+  // Créer un dictionnaire des créneaux horaires pour un accès rapide
+  const timeSlotsMap = (timeSlots || []).reduce((acc, slot) => {
+    acc[slot.id] = slot;
+    return acc;
+  }, {} as Record<string, { id: string, start: string, end: string }>);
+  
+  // Calculer les heures pour chaque horaire
+  return schedules.map(schedule => {
+    // Marquer comme absence si pas présent ou si un type d'absence est spécifié
+    const isAbsence = !schedule.isPresent || !!schedule.absenceTypeId;
+    
+    // Calculer les heures si c'est un créneau horaire
+    let hours = 0;
+    if (!isAbsence && schedule.timeSlotId && timeSlotsMap[schedule.timeSlotId]) {
+      const timeSlot = timeSlotsMap[schedule.timeSlotId];
+      const startTime = new Date(`2000-01-01T${timeSlot.start}`);
+      const endTime = new Date(`2000-01-01T${timeSlot.end}`);
+      
+      // Calculer la différence en heures
+      hours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+    }
+    
+    return {
+      ...schedule,
+      isAbsence,
+      hours
+    };
+  });
+}
+
 export async function getSchedules(startDate: string, endDate: string) {
   // Validation des dates
   if (!isValidDate(startDate) || !isValidDate(endDate)) {

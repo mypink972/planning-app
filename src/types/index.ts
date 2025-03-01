@@ -1,7 +1,24 @@
+export interface Store {
+  id: string;
+  name: string;
+  address?: string;
+}
+
+// Interface pour les données brutes de l'employé provenant de la base de données
+export interface EmployeeRaw {
+  id: string;
+  name: string;
+  email?: string;
+  store_id?: string;
+  store?: Store;
+}
+
 export interface Employee {
   id: string;
   name: string;
   email?: string;
+  storeId?: string;
+  store?: Store;
 }
 
 export interface TimeSlot {
@@ -22,6 +39,8 @@ export interface Schedule {
   isPresent: boolean;
   timeSlotId?: string;
   absenceTypeId?: string;
+  hours?: number;
+  isAbsence?: boolean;
 }
 
 export interface StoreHours {

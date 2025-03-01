@@ -1,32 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { PlusCircle, Trash2, Edit2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { updateEmployee } from '../../services/employees';
-import type { Employee } from '../../types';
+import { getEmployees, updateEmployee } from '../../services/employees';
+import type { Employee, Store } from '../../types';
 
 export default function EmployeesList() {
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [newEmployee, setNewEmployee] = useState({ name: '', email: '' });
+  const [stores, setStores] = useState<Store[]>([]);
+  const [newEmployee, setNewEmployee] = useState({ name: '', email: '', storeId: '' });
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadEmployees();
+    loadStores();
   }, []);
 
   async function loadEmployees() {
     try {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('*')
-        .order('name');
-      
-      if (error) throw error;
-      setEmployees(data || []);
+      const data = await getEmployees();
+      setEmployees(data);
     } catch (error) {
       console.error('Erreur lors du chargement des employés:', error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadStores() {
+    try {
+      const { data, error } = await supabase
+        .from('stores')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      setStores(data || []);
+    } catch (error) {
+      console.error('Erreur lors du chargement des magasins:', error);
     }
   }
 
@@ -38,12 +49,13 @@ export default function EmployeesList() {
         .from('employees')
         .insert([{
           name: newEmployee.name.trim(),
-          email: newEmployee.email.trim() || null
+          email: newEmployee.email ? newEmployee.email.trim() : undefined,
+          store_id: newEmployee.storeId || undefined
         }]);
 
       if (error) throw error;
       
-      setNewEmployee({ name: '', email: '' });
+      setNewEmployee({ name: '', email: '', storeId: '' });
       loadEmployees();
     } catch (error) {
       console.error('Erreur lors de l\'ajout d\'un employé:', error);
@@ -54,10 +66,20 @@ export default function EmployeesList() {
     if (!editingEmployee || !editingEmployee.name.trim()) return;
 
     try {
-      await updateEmployee(editingEmployee.id, {
+      // Préparer les données de mise à jour
+      const updates: Record<string, any> = {
         name: editingEmployee.name.trim(),
-        email: editingEmployee.email?.trim() || null
-      });
+        storeId: editingEmployee.storeId || undefined
+      };
+
+      // Gérer explicitement le cas où l'email est vide ou nul
+      if (editingEmployee.email === '' || editingEmployee.email === null) {
+        updates.email = null; // Envoyer null explicitement pour supprimer l'email
+      } else if (editingEmployee.email) {
+        updates.email = editingEmployee.email.trim();
+      }
+
+      await updateEmployee(editingEmployee.id, updates);
       
       setEditingEmployee(null);
       loadEmployees();
@@ -103,6 +125,16 @@ export default function EmployeesList() {
             onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
             className="flex-1 p-2 border rounded"
           />
+          <select
+            value={newEmployee.storeId}
+            onChange={(e) => setNewEmployee({ ...newEmployee, storeId: e.target.value })}
+            className="flex-1 p-2 border rounded"
+          >
+            <option value="">Sélectionner un magasin</option>
+            {stores.map(store => (
+              <option key={store.id} value={store.id}>{store.name}</option>
+            ))}
+          </select>
           <button
             onClick={addEmployee}
             className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center gap-2"
@@ -130,6 +162,16 @@ export default function EmployeesList() {
                     className="flex-1 p-2 border rounded"
                     placeholder="Email (optionnel)"
                   />
+                  <select
+                    value={editingEmployee.storeId || ''}
+                    onChange={(e) => setEditingEmployee({ ...editingEmployee, storeId: e.target.value })}
+                    className="flex-1 p-2 border rounded"
+                  >
+                    <option value="">Sélectionner un magasin</option>
+                    {stores.map(store => (
+                      <option key={store.id} value={store.id}>{store.name}</option>
+                    ))}
+                  </select>
                   <div className="flex gap-2">
                     <button
                       onClick={handleUpdateEmployee}
@@ -148,9 +190,10 @@ export default function EmployeesList() {
               ) : (
                 <div className="flex-1">
                   <div className="font-medium">{employee.name}</div>
-                  {employee.email && (
-                    <div className="text-sm text-gray-600">{employee.email}</div>
-                  )}
+                  <div className="text-sm text-gray-600">
+                    {employee.email && <div>{employee.email}</div>}
+                    {employee.store && <div>Magasin : {employee.store.name}</div>}
+                  </div>
                 </div>
               )}
               <div className="flex gap-2">

@@ -1,5 +1,9 @@
 import { supabase } from '../lib/supabase';
-import type { AbsenceType } from '../types';
+export interface AbsenceType {
+  id: string;
+  label: string;
+  created_at?: string;
+}
 
 export async function getAbsenceTypes() {
   const { data, error } = await supabase
