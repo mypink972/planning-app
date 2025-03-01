@@ -291,7 +291,24 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
         getAbsenceTypes()
       ]);
 
-      setEmployees(employeesData);
+      // Trier les employés par ordre alphabétique
+      // Si un magasin est sélectionné, on trie simplement par nom
+      // Si tous les magasins sont sélectionnés, on trie d'abord par magasin, puis par nom
+      const sortedEmployees = [...employeesData].sort((a, b) => {
+        if (!selectedStoreId) {
+          // Trier par magasin d'abord, puis par nom
+          const storeNameA = a.store?.name || '';
+          const storeNameB = b.store?.name || '';
+          
+          if (storeNameA !== storeNameB) {
+            return storeNameA.localeCompare(storeNameB);
+          }
+        }
+        // Trier par nom d'employé
+        return a.name.localeCompare(b.name);
+      });
+
+      setEmployees(sortedEmployees);
       setTimeSlots(timeSlotsData);
       setAbsenceTypes(absenceTypesData);
       await loadSchedules();
@@ -585,50 +602,120 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
             </td>
           </tr>
 
-          {employees.map((employee, index) => (
-            <tr key={employee.id} className={`border-t border-b border-gray-200 ${index % 2 === 0 ? '' : 'bg-gray-50'}`}>
-              <td className="p-4">
-                <span className="font-medium">{employee.name}</span>
-              </td>
-              {weekDates.map((date) => {
-                const schedule = getScheduleForCell(employee.id, date);
-                const timeSlot = timeSlots.find((ts) => ts.id === schedule.timeSlotId);
-                const absenceType = absenceTypes.find((at) => at.id === schedule.absenceTypeId);
-                const closed = isStoreClosed(date);
-
-                return (
-                  <td
-                    key={date.toISOString()}
-                    className={`p-4 text-center ${
-                      closed 
-                        ? 'bg-gray-100 cursor-not-allowed' 
-                        : 'cursor-pointer hover:bg-blue-500 hover:text-white'
-                    }`}
-                    onClick={() => !closed && handleCellClick(employee.id, date)}
-                  >
-                    {!closed && (
-                      schedule?.isPresent ? (
-                        schedule?.timeSlotId ? (
-                          <span className="text-black">
-                            {formatTimeForDisplay(timeSlot?.start || '')} - {formatTimeForDisplay(timeSlot?.end || '')}
-                          </span>
-                        ) : null
-                      ) : (
-                        absenceType && (
-                          <span className="text-black">
-                            {absenceType.label}
-                          </span>
-                        )
-                      )
-                    )}
+          {!selectedStoreId && (
+            // Grouper les employés par magasin
+            Object.entries(
+              employees.reduce((acc, employee) => {
+                const storeName = employee.store?.name || 'Sans magasin';
+                if (!acc[storeName]) {
+                  acc[storeName] = [];
+                }
+                acc[storeName].push(employee);
+                return acc;
+              }, {} as Record<string, Employee[]>)
+            ).map(([storeName, storeEmployees]) => (
+              <React.Fragment key={storeName}>
+                {/* En-tête du magasin */}
+                <tr className="bg-blue-100">
+                  <td colSpan={9} className="p-3 font-bold text-blue-800">
+                    {storeName}
                   </td>
-                );
-              })}
-              <td className="p-4 text-right font-medium">
-                {calculateWeeklyTotal(employee.id)}h
-              </td>
-            </tr>
-          ))}
+                </tr>
+                
+                {/* Employés du magasin */}
+                {storeEmployees.map((employee, index) => (
+                  <tr key={employee.id} className={`border-t border-b border-gray-200 ${index % 2 === 0 ? '' : 'bg-gray-50'}`}>
+                    <td className="p-4 pl-8"> {/* Indentation pour montrer la hiérarchie */}
+                      <span className="font-medium">{employee.name}</span>
+                    </td>
+                    {weekDates.map((date) => {
+                      const schedule = getScheduleForCell(employee.id, date);
+                      const timeSlot = timeSlots.find((ts) => ts.id === schedule.timeSlotId);
+                      const absenceType = absenceTypes.find((at) => at.id === schedule.absenceTypeId);
+                      const closed = isStoreClosed(date);
+
+                      return (
+                        <td
+                          key={date.toISOString()}
+                          className={`p-4 text-center ${
+                            closed 
+                              ? 'bg-gray-100 cursor-not-allowed' 
+                              : 'cursor-pointer hover:bg-blue-500 hover:text-white'
+                          }`}
+                          onClick={() => !closed && handleCellClick(employee.id, date)}
+                        >
+                          {!closed && (
+                            schedule?.isPresent ? (
+                              schedule?.timeSlotId ? (
+                                <span className="text-black">
+                                  {formatTimeForDisplay(timeSlot?.start || '')} - {formatTimeForDisplay(timeSlot?.end || '')}
+                                </span>
+                              ) : null
+                            ) : (
+                              absenceType && (
+                                <span className="text-black">
+                                  {absenceType.label}
+                                </span>
+                              )
+                            )
+                          )}
+                        </td>
+                      );
+                    })}
+                    <td className="p-4 text-right font-medium">
+                      {calculateWeeklyTotal(employee.id)}h
+                    </td>
+                  </tr>
+                ))}
+              </React.Fragment>
+            ))
+          ) : (
+            // Affichage normal pour un seul magasin sélectionné
+            employees.map((employee, index) => (
+              <tr key={employee.id} className={`border-t border-b border-gray-200 ${index % 2 === 0 ? '' : 'bg-gray-50'}`}>
+                <td className="p-4">
+                  <span className="font-medium">{employee.name}</span>
+                </td>
+                {weekDates.map((date) => {
+                  const schedule = getScheduleForCell(employee.id, date);
+                  const timeSlot = timeSlots.find((ts) => ts.id === schedule.timeSlotId);
+                  const absenceType = absenceTypes.find((at) => at.id === schedule.absenceTypeId);
+                  const closed = isStoreClosed(date);
+
+                  return (
+                    <td
+                      key={date.toISOString()}
+                      className={`p-4 text-center ${
+                        closed 
+                          ? 'bg-gray-100 cursor-not-allowed' 
+                          : 'cursor-pointer hover:bg-blue-500 hover:text-white'
+                      }`}
+                      onClick={() => !closed && handleCellClick(employee.id, date)}
+                    >
+                      {!closed && (
+                        schedule?.isPresent ? (
+                          schedule?.timeSlotId ? (
+                            <span className="text-black">
+                              {formatTimeForDisplay(timeSlot?.start || '')} - {formatTimeForDisplay(timeSlot?.end || '')}
+                            </span>
+                          ) : null
+                        ) : (
+                          absenceType && (
+                            <span className="text-black">
+                              {absenceType.label}
+                            </span>
+                          )
+                        )
+                      )}
+                    </td>
+                  );
+                })}
+                <td className="p-4 text-right font-medium">
+                  {calculateWeeklyTotal(employee.id)}h
+                </td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
 
