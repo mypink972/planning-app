@@ -602,7 +602,7 @@ export default forwardRef<WeeklyScheduleHandle, WeeklyScheduleProps>(function We
             </td>
           </tr>
 
-          {!selectedStoreId && (
+          {!selectedStoreId ? (
             // Grouper les employés par magasin
             Object.entries(
               employees.reduce((acc, employee) => {
