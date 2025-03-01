@@ -26,8 +26,13 @@ export async function sendPlanningEmails(pdfData: Uint8Array, employees: Employe
         name: emp.name,
         email: emp.email
       })),
-      dateReference: dateReference.toISOString()
+      weekStartDate: dateReference.toISOString() // Utiliser le nom de paramètre attendu par le serveur
     };
+    
+    console.log('Données envoyées:', {
+      ...requestData,
+      pdfBuffer: `[Array de ${requestData.pdfBuffer.length} éléments]`
+    });
     
     console.log('Envoi de la requête au serveur...');
     
