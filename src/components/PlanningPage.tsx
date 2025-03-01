@@ -106,11 +106,23 @@ export default function PlanningPage() {
       const pdfBuffer = await exportMonthlyPDF(schedules, employees, currentDate, false);
       console.log('PDF généré avec succès, taille:', pdfBuffer.byteLength, 'octets');
       
+      // Préparer les informations de date pour l'email
+      const monthName = formatDateToFrench(currentDate, { month: 'long' });
+      const year = currentDate.getFullYear();
+      const emailSubject = `Planning mensuel - ${monthName} ${year}`;
+      
       // Envoyer les emails avec la vue mensuelle
       console.log('Envoi des emails en cours...');
       console.log('URL de l\'API:', config.apiUrl);
+      console.log('Objet de l\'email:', emailSubject);
       
-      await sendPlanningEmails(pdfBuffer, employeesWithEmail, currentDate);
+      await sendPlanningEmails(pdfBuffer, employeesWithEmail, currentDate, {
+        subject: emailSubject,
+        isMonthly: true,
+        month: monthName,
+        year: year
+      });
+      
       console.log('Emails envoyés avec succès!');
       alert('Emails envoyés avec succès !');
     } catch (error) {

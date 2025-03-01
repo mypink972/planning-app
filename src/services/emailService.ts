@@ -1,7 +1,19 @@
 import type { Employee } from '../types';
 import config from '../config/config';
 
-export async function sendPlanningEmails(pdfData: Uint8Array, employees: Employee[], dateReference: Date) {
+interface EmailOptions {
+  subject?: string;
+  isMonthly?: boolean;
+  month?: string;
+  year?: number;
+}
+
+export async function sendPlanningEmails(
+  pdfData: Uint8Array, 
+  employees: Employee[], 
+  dateReference: Date,
+  options: EmailOptions = {}
+) {
   try {
     console.log('Préparation de l\'envoi des emails...');
     console.log('URL API:', config.apiUrl);
@@ -26,7 +38,11 @@ export async function sendPlanningEmails(pdfData: Uint8Array, employees: Employe
         name: emp.name,
         email: emp.email
       })),
-      weekStartDate: dateReference.toISOString() // Utiliser le nom de paramètre attendu par le serveur
+      weekStartDate: dateReference.toISOString(), // Pour compatibilité avec le serveur
+      isMonthly: options.isMonthly || false,
+      subject: options.subject || 'Planning',
+      month: options.month,
+      year: options.year
     };
     
     console.log('Données envoyées:', {

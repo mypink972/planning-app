@@ -178,7 +178,10 @@ export async function exportMonthlyPDF(schedules: Schedule[], employees: Employe
     }
     
     console.log('Export PDF mensuel terminé avec succès');
-    return pdf.output('arraybuffer');
+    // Convertir le PDF en Uint8Array pour l'envoi par email
+    const pdfOutput = pdf.output('arraybuffer');
+    console.log('Taille du PDF généré:', pdfOutput.byteLength, 'octets');
+    return new Uint8Array(pdfOutput);
   } catch (error) {
     console.error('Erreur lors de l\'export PDF mensuel:', error);
     throw error;
