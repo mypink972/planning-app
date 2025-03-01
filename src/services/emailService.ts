@@ -31,6 +31,13 @@ export async function sendPlanningEmails(
     }
     
     // Préparer les données pour l'envoi
+    let emailContent = '';
+    
+    // Si c'est un planning mensuel, on va créer un contenu personnalisé
+    if (options.isMonthly && options.month && options.year) {
+      emailContent = `Veuillez trouver ci-joint votre planning pour le mois de ${options.month.toLowerCase()} ${options.year}.`;
+    }
+    
     const requestData = {
       pdfBuffer: Array.from(pdfData), // Convertir Uint8Array en tableau normal pour JSON
       employees: employees.map(emp => ({
@@ -41,13 +48,19 @@ export async function sendPlanningEmails(
       weekStartDate: dateReference.toISOString(), // Pour compatibilité avec le serveur
       isMonthly: options.isMonthly || false,
       subject: options.subject || 'Planning',
+      emailContent: emailContent,
       month: options.month,
-      year: options.year
+      year: options.year,
+      customEmail: true // Indique au serveur d'utiliser nos valeurs personnalisées
     };
     
     console.log('Données envoyées:', {
       ...requestData,
-      pdfBuffer: `[Array de ${requestData.pdfBuffer.length} éléments]`
+      pdfBuffer: `[Array de ${requestData.pdfBuffer.length} éléments]`,
+      isMonthly: requestData.isMonthly,
+      subject: requestData.subject,
+      emailContent: requestData.emailContent,
+      customEmail: requestData.customEmail
     });
     
     console.log('Envoi de la requête au serveur...');
